@@ -1,0 +1,8 @@
+image_path: pinecone_good.jpg
+save_path: pinecone_good
+method: GKAN
+meta_learn: True
+meta_path: maml_gkan.pth
+steps: 101
+learning_rate: 0.001
+image_save_steps: 10

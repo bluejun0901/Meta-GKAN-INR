@@ -1,8 +1,9 @@
 import os
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "2")
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "1")
 
 import glob
 import random
+from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
@@ -70,7 +71,7 @@ def clone_model(model: nn.Module) -> nn.Module:
 
 def maml_train(
     method: str = "GKAN",
-    data_root: str = "dataset/STI",
+    data_root: str = "../../dataset/STI",
     meta_iters: int = 500,
     meta_batch_size: int = 4,
     inner_steps: int = 5,
@@ -162,9 +163,10 @@ def maml_train(
             avg_psnr = float(np.mean(task_psnr)) if task_psnr else 0.0
             print(f"[Meta {it:04d}/{meta_iters}] Avg Query PSNR: {avg_psnr:.2f} dB")
 
-    # Save meta-learned weights
-    os.makedirs("checkpoints", exist_ok=True)
-    ckpt_path = os.path.join("checkpoints", f"maml_{method.lower()}.pth")
+    # Save meta-learned weights in repo-level checkpoints directory
+    ckpt_dir = Path(__file__).resolve().parents[2] / "checkpoints"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_path = ckpt_dir / f"maml_{method.lower()}.pth"
     torch.save({"state_dict": base_model.state_dict(), "method": method}, ckpt_path)
     print(f"Saved meta-learned weights to {ckpt_path}")
 
