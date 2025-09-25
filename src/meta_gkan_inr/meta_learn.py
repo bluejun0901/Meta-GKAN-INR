@@ -39,28 +39,35 @@ def load_image_tensor(path: str, device: torch.device) -> torch.Tensor:
     return img
 
 
-def make_coords(h: int, w: int, c: int, device: torch.device) -> torch.Tensor:
-    x = torch.arange(1, h + 1, device=device, dtype=torch.float32)
-    y = torch.arange(1, w + 1, device=device, dtype=torch.float32)
-    z = torch.arange(1, c + 1, device=device, dtype=torch.float32)
-    X, Y, Z = torch.meshgrid(x, y, z)
-    coords = torch.stack([X.reshape(-1), Y.reshape(-1), Z.reshape(-1)], dim=1)
-    return coords.to(device=device, dtype=torch.float32)
+def indices_to_coords(idx: torch.Tensor, h: int, w: int, c: int) -> torch.Tensor:
+    idx = idx.to(torch.int64)
+    z = (idx % c) + 1
+    hw_idx = idx // c
+    y = (hw_idx % w) + 1
+    x = (hw_idx // w) + 1
+    return torch.stack([x, y, z], dim=1).to(dtype=torch.float32)
 
 
 def split_support_query(
-    coords: torch.Tensor,
-    pixels: torch.Tensor,
+    img: torch.Tensor,
     n_support: int,
     n_query: int,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    N = coords.shape[0]
-    idx = torch.randperm(N, device=coords.device)
-    n_support = min(n_support, N // 2)
-    n_query = min(n_query, N - n_support)
-    is_idx = idx[:n_support]
-    iq_idx = idx[n_support : n_support + n_query]
-    return coords[is_idx], pixels[is_idx], coords[iq_idx], pixels[iq_idx]
+    h, w, c = img.shape
+    total = h * w * c
+    n_support = min(n_support, total // 2)
+    n_query = min(n_query, total - n_support)
+    perm = torch.randperm(total, device=img.device)
+    support_idx = perm[:n_support]
+    query_idx = perm[n_support : n_support + n_query]
+
+    coords_support = indices_to_coords(support_idx, h, w, c).to(img.device)
+    coords_query = indices_to_coords(query_idx, h, w, c).to(img.device)
+
+    flat_pixels = img.view(-1, 1)
+    ys = flat_pixels[support_idx]
+    yq = flat_pixels[query_idx]
+    return coords_support, ys, coords_query, yq
 
 
 def clone_model(model: nn.Module) -> nn.Module:
@@ -114,11 +121,8 @@ def maml_train(
         for pth in batch_paths:
             # Prepare task data
             img = load_image_tensor(pth, device)
-            h, w, c = img.shape
-            coords = make_coords(h, w, c, device)
-            pixels = img.view(-1, 1)  # target per (x,y,channel)
 
-            xs, ys, xq, yq = split_support_query(coords, pixels, n_support, n_query)
+            xs, ys, xq, yq = split_support_query(img, n_support, n_query)
 
             # Inner-loop adaptation on a cloned model (FO-MAML)
             fast_model = clone_model(base_model)

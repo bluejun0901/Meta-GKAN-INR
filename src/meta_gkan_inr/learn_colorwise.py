@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "8"
 from pathlib import Path
 from dotenv import load_dotenv
 import argparse
@@ -9,7 +9,6 @@ PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
 MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
 IMAGE_ROOT = Path(os.getenv("IMAGE_ROOT")).resolve() # type: ignore
 CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
-LOG_ROOT = Path(os.getenv("LOG_ROOT")).resolve() # type: ignore
 
 import torch
 from torch import optim
@@ -24,7 +23,6 @@ from skimage import io as skio
 import random
 from omegaconf import OmegaConf
 from model import INR
-import json
 
 def main():
     parser = argparse.ArgumentParser()
@@ -111,7 +109,6 @@ def main():
 
     save_path = IMAGE_ROOT / config.save_path
     save_path.mkdir(parents=True, exist_ok=True)
-    psnr_record = []
     for i in range(max_iter):
         print('\r', i, ps_best, end='\r\r')
         try:
@@ -142,15 +139,6 @@ def main():
                 gt_np,
                 np.clip(full_recon, 0, 1)
             )
-            cur_log = {
-                "name": config.save_path.replace("/", "_").replace("_", " "),
-                "step": i,
-                "params": s,
-                "psnr": ps_here,
-                "psnr_best": ps_best,
-                "loss": loss.item()
-            }
-            psnr_record.append(cur_log)
             if ps_here > ps_best:
                 ps_best = ps_here
             
@@ -159,14 +147,9 @@ def main():
             meta_str = "_meta" if config.meta_learn else ""
             img.save(save_path / f"{method}{i}{meta_str}.png")
 
-    log_save_path = LOG_ROOT / config.save_path / "log.json"
-    log_save_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(log_save_path, "w") as f:
-        json.dump(psnr_record, f)
-
     model_save_path = MODEL_ROOT / config.save_path / "model.pth"
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"state_dict": model.state_dict(), "method": method}, model_save_path)
+    torch.save({"state_dict": model.state_dict(), "method": method}, MODEL_ROOT / config.save_path / "model.pth")
 
 if __name__ == "__main__":
     main()
