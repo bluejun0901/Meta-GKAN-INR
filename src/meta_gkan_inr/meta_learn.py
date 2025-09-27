@@ -14,6 +14,7 @@ from skimage.metrics import peak_signal_noise_ratio
 
 from model import INR
 
+mid = 100
 
 def list_images(root: str) -> List[str]:
     exts = ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.ppm", "*.pgm"]
@@ -71,7 +72,7 @@ def split_support_query(
 
 
 def clone_model(model: nn.Module) -> nn.Module:
-    fast = INR(model.method).to(next(model.parameters()).device)
+    fast = INR(model.method, mid).to(next(model.parameters()).device)
     fast.load_state_dict(model.state_dict())
     return fast
 
@@ -103,7 +104,7 @@ def maml_train(
         raise RuntimeError(f"No images found under {data_root}")
 
     # Initialize base model and meta-optimizer
-    base_model = INR(method).to(device)
+    base_model = INR(method, mid=mid).to(device)
     base_model.method = method  # type: ignore
     meta_opt = optim.Adam(base_model.parameters(), lr=meta_lr)
     mse = nn.MSELoss()
@@ -170,7 +171,7 @@ def maml_train(
     # Save meta-learned weights in repo-level checkpoints directory
     ckpt_dir = Path(__file__).resolve().parents[2] / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_path = ckpt_dir / f"maml_{method.lower()}.pth"
+    ckpt_path = ckpt_dir / f"maml_{method.lower()}_{mid}.pth"
     torch.save({"state_dict": base_model.state_dict(), "method": method}, ckpt_path)
     print(f"Saved meta-learned weights to {ckpt_path}")
 

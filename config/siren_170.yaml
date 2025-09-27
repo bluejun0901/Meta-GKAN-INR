@@ -1,0 +1,8 @@
+image_path: meerkat.jpg
+save_path: meerkat_siren
+method: SIREN
+meta_learn: False
+steps: 1001
+mid: 170
+learning_rate: 0.001
+image_save_steps: 50

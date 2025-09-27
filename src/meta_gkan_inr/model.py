@@ -55,18 +55,20 @@ class input_mapping(nn.Module):
         return in_data
     
 class INR(nn.Module): 
-    def __init__(self,method):
+    def __init__(self,method,mid=None):
         super(INR, self).__init__()
         self.method = method
         
         if method == 'SIREN':
-            mid = 450
+            if mid is None:
+                mid = 450
             self.H_net = nn.Sequential(nn.Linear(3,mid),
                                         SineLayer(mid,mid),
                                         SineLayer(mid,mid),
                                         SineLayer(mid,1))
         elif method == 'PE':
-            mid = 320
+            if mid is None:
+                mid = 320
             B_gauss = torch.empty(mid, 3, dtype=torch.float32)
             torch.nn.init.kaiming_normal_(B_gauss, a=math.sqrt(2))
             self.H_net = nn.Sequential(input_mapping(B_gauss),
@@ -79,7 +81,8 @@ class INR(nn.Module):
                                     nn.Linear(mid,1))
             
         elif method == 'GKAN':
-            mid = 260
+            if mid is None:
+                mid = 260
             self.H_net = nn.Sequential(nn.Linear(3,mid),
                                         GKANLayer(mid,mid),
                                         GKANLayer(mid,mid),

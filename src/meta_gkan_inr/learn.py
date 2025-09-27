@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 from pathlib import Path
 from dotenv import load_dotenv
 import argparse
@@ -25,6 +25,7 @@ import random
 from omegaconf import OmegaConf
 from model import INR
 import json
+import tempfile
 
 def main():
     parser = argparse.ArgumentParser()
@@ -93,7 +94,7 @@ def main():
     )
     data_iter = iter(data_loader)
 
-    model = INR(method).to(device)
+    model = INR(method, config.mid).to(device)
     if config.meta_learn:
         checkpoint_path = MODEL_ROOT / config.meta_path
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
@@ -161,8 +162,29 @@ def main():
 
     log_save_path = LOG_ROOT / config.save_path / "log.json"
     log_save_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(log_save_path, "w") as f:
-        json.dump(psnr_record, f)
+    if log_save_path.exists():
+        try:
+            with open(log_save_path, "r", encoding="utf-8") as existing_file:
+                existing_records = json.load(existing_file)
+            if not isinstance(existing_records, list):
+                existing_records = []
+        except json.JSONDecodeError:
+            existing_records = []
+    else:
+        existing_records = []
+
+    combined_records = existing_records + psnr_record
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        dir=log_save_path.parent,
+        delete=False,
+        encoding="utf-8"
+    ) as tmp_file:
+        json.dump(combined_records, tmp_file)
+        temp_name = tmp_file.name
+
+    os.replace(temp_name, log_save_path)
 
     model_save_path = MODEL_ROOT / config.save_path / "model.pth"
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
