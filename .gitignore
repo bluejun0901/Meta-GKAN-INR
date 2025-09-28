@@ -6,3 +6,4 @@
 dataset/
 checkpoints/
 models/
+logs/

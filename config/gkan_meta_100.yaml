@@ -1,5 +1,5 @@
 image_path: meerkat.jpg
-save_path: meerkat_meta
+save_path: meerkat_meta_100
 method: GKAN
 meta_learn: True
 meta_path: maml_gkan_100.pth

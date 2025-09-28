@@ -1,5 +1,5 @@
 image_path: meerkat.jpg
-save_path: meerkat_siren
+save_path: meerkat_siren_450
 method: SIREN
 meta_learn: False
 steps: 1001
