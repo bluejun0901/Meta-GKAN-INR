@@ -144,12 +144,12 @@ def main():
                 np.clip(full_recon, 0, 1)
             )
             cur_log = {
-                "name": config.save_path.replace("/", "_").replace("_", " "),
-                "step": i,
-                "params": s,
-                "psnr": ps_here,
-                "psnr_best": ps_best,
-                "loss": loss.item()
+                "name": str(config.save_path.replace("/", "_").replace("_", " ")),
+                "step": int(i),
+                "params": int(s),
+                "psnr": float(ps_here),
+                "psnr_best": float(ps_best),
+                "loss": float(loss.item())
             }
             psnr_record.append(cur_log)
             if ps_here > ps_best:
