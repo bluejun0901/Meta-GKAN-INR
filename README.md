@@ -7,3 +7,5 @@ pip install -r requirements.txt
 메롱메롱
 
 수정
+
+i'm mj
