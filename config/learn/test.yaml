@@ -1,0 +1,10 @@
+image_path: something
+save_path: something
+method: GKAN
+steps: 1000
+learning_rate: 1e-3
+batch_size: 100000
+image_save_steps: 50
+mid: None # or number like 260
+meta_learn: False
+meta_path: None
