@@ -5,6 +5,6 @@
 *.json
 dataset/
 checkpoints/
-models/
+./models/
 logs/
 210_OmniGothic.ttf
