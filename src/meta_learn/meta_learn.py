@@ -129,9 +129,10 @@ class MetaLearner(BaseMetaLearner):
         meta_opt = optim.Adam(base_model.parameters(), lr=self.meta_lr)
         mse = nn.MSELoss()
 
-        print(f"Tasks: {len(img_paths)} images. Device: {device}.")
+        self.logger.info(f"Tasks: {len(img_paths)} images. Device: {device}.")
         total_params = sum(p.numel() for p in base_model.parameters())
-        print(f"Base model params: {total_params}")
+        self.logger.info(f"Base model params: {total_params}")
+        self.logger.info("Starting meta-training...")
 
         for it in range(1, self.meta_iters + 1):
             meta_opt.zero_grad()
@@ -186,14 +187,14 @@ class MetaLearner(BaseMetaLearner):
 
             if it % 10 == 0:
                 avg_psnr = float(np.mean(task_psnr)) if task_psnr else 0.0
-                print(f"[Meta {it:04d}/{self.meta_iters}] Avg Query PSNR: {avg_psnr:.2f} dB")
+                self.logger.info(f"[Meta {it:04d}/{self.meta_iters}] Avg Query PSNR: {avg_psnr:.2f} dB")
 
         # Save meta-learned weights in repo-level checkpoints directory
         ckpt_dir = Path(self.save_path)
         ckpt_dir.mkdir(parents=True, exist_ok=True)
         ckpt_path = ckpt_dir / self.model_name
         torch.save({"state_dict": base_model.state_dict()}, ckpt_path)
-        print(f"Saved meta-learned weights to {ckpt_path}")
+        self.logger.info(f"Saved meta-learned weights to {ckpt_path}")
 
 
 def main():

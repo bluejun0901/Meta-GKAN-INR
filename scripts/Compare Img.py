@@ -6,6 +6,10 @@ def compare_images_positive_diff(image_path1, image_path2, direction="2_minus_1"
     image1 = cv2.imread(image_path1)
     image2 = cv2.imread(image_path2)
 
+    if not image1 or not image2:
+        print("오류: 이미지 경로를 확인하세요.")
+        return
+
     h1, w1 = image1.shape[:2]
     image2 = cv2.resize(image2, (w1, h1))
 
@@ -55,7 +59,7 @@ def compare_images_positive_diff(image_path1, image_path2, direction="2_minus_1"
     axes[1, 1].axis("off")
     fig.colorbar(im_total, ax=axes[1, 1], shrink=0.8)
 
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.tight_layout(rect=(0, 0.03, 1, 0.95))
     plt.show()
 
 

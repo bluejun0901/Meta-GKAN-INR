@@ -39,7 +39,7 @@ def run(run_dir: Path, config_path: str, config_name: str, overides: list[str]):
         meta_trainer.train()
 
     if OmegaConf.select(config, "args.learn", default=False):
-        learner: BaseLearner = hydra.utils.instantiate(config.learn)
+        learner: BaseLearner = hydra.utils.instantiate(config.learn, run_dir=run_dir)
         learner.train()
 
 

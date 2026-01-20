@@ -1,10 +1,10 @@
 _target_: src.learn.Learner
 image_path: dataset/STI/Classic/airplane.bmp
-save_path: models/test
 model:
   _target_: src.models.INR
   method: GKAN
   mid: ${args.mid}
+model_name: test
 steps: 1000
 learning_rate: 1e-3
 batch_size: 100000

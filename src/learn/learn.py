@@ -1,8 +1,6 @@
 import argparse
-import json
-import os
+import logging
 import random
-import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -17,6 +15,8 @@ from skimage.metrics import peak_signal_noise_ratio
 from torch import optim
 from torch.utils.data import DataLoader, TensorDataset
 
+from src.logging.train_logger import TrainLogger
+
 
 class BaseLearner(ABC):
     @abstractmethod
@@ -28,8 +28,9 @@ class Learner(BaseLearner):
     def __init__(
         self,
         image_path: str,
-        save_path: str | Path,
+        run_dir: str | Path,
         model: nn.Module,
+        model_name: str,
         steps: int = 1000,
         learning_rate: float = 1e-3,
         batch_size: int = 100000,
@@ -39,15 +40,33 @@ class Learner(BaseLearner):
     ):
         # Basic hyperparameters
         self.model = model
+        self.model_name = model_name
         self.image_path: str = image_path
         # Accept str in config, store as Path
-        self.save_path: Path = Path(save_path)
+        self.run_dir: Path = Path(run_dir)
+        self.artifact_path: Path = self.run_dir / "learn" / "artifacts"
+        self.model_path: Path = self.run_dir / "learn" / "models"
+        self.log_path: Path = self.run_dir / "learn" / "logs"
+        self.artifact_path.mkdir(parents=True, exist_ok=True)
+        self.model_path.mkdir(parents=True, exist_ok=True)
+        self.log_path.mkdir(parents=True, exist_ok=True)
+
         self.steps: int = steps
         self.learning_rate: float = learning_rate
         self.batch_size: int = batch_size
         self.image_save_steps: int = image_save_steps
         self.meta_learn: bool = meta_learn
         self.meta_path: str | None = meta_path
+
+        self.logger = logging.getLogger(__name__)
+
+        self.metrics_logger: TrainLogger = TrainLogger(
+            run_dir=self.run_dir,
+            name="learn",
+            auto_draw=True,
+            draw_freq=100,
+            draw_kwargs={"y_axis": ["psnr", "psnr_best", "loss"], "x_axis": "step"},
+        )
 
     def _set_seed(self, seed: int = 1) -> None:
         torch.manual_seed(seed)
@@ -83,7 +102,7 @@ class Learner(BaseLearner):
         x_in = torch.arange(1, h + 1, dtype=torch.float32)
         y_in = torch.arange(1, w + 1, dtype=torch.float32)
         z_in = torch.arange(1, c + 1, dtype=torch.float32)
-        x_in, y_in, z_in = torch.meshgrid(x_in, y_in, z_in)
+        x_in, y_in, z_in = torch.meshgrid(x_in, y_in, z_in, indexing="ij")
         coords = torch.stack((x_in.reshape(-1), y_in.reshape(-1), z_in.reshape(-1)), dim=1)
         return coords
 
@@ -138,15 +157,13 @@ class Learner(BaseLearner):
 
         params = list(model.parameters())
         n_params = sum(int(np.prod(list(p.size()))) for p in params)
-        print(f"Number of params: {n_params}")
+        self.logger.info(f"Number of params: {n_params}")
 
         optimizer = optim.Adam(params, lr=self.learning_rate, weight_decay=0)
         ps_best = 0.0
-        self.save_path.mkdir(parents=True, exist_ok=True)
-        psnr_record: list[dict] = []
 
         for i in range(self.steps):
-            print("\r", i, ps_best, end="\r\r")
+            self.logger.info(f"Step {i + 1}/{self.steps} - Best PSNR: {ps_best:.4f}")
             try:
                 batch_coords, batch_pixels = next(data_iter)
             except StopIteration:
@@ -165,49 +182,17 @@ class Learner(BaseLearner):
             if i % self.image_save_steps == 0:
                 recon = self._reconstruct_full(model, coords, gt, device)
                 ps_here = peak_signal_noise_ratio(gt.detach().cpu().numpy(), np.clip(recon, 0, 1))
-                psnr_record.append(
-                    {
-                        "name": str(self.save_path).replace("/", "_").replace("_", " "),
-                        "step": int(i),
-                        "params": int(n_params),
-                        "psnr": float(ps_here),
-                        "psnr_best": float(ps_best),
-                        "loss": float(loss.item()),
-                    }
-                )
                 ps_best = max(ps_best, ps_here)
+                self.metrics_logger.log(step=i, psnr=ps_here, psnr_best=ps_best, loss=loss.item())
 
                 arr = np.clip(recon, 0, 1)
                 img = Image.fromarray((arr * 255).astype(np.uint8))
-                meta_str = "_meta" if self.meta_learn else ""
-                img.save(self.save_path / f"{self.method}{i}{meta_str}.png")
-
-        # Persist logs atomically
-        log_save_path = self.save_path / "log.json"
-        log_save_path.parent.mkdir(parents=True, exist_ok=True)
-        if log_save_path.exists():
-            try:
-                with open(log_save_path, "r", encoding="utf-8") as f:
-                    existing_records = json.load(f)
-                if not isinstance(existing_records, list):
-                    existing_records = []
-            except json.JSONDecodeError:
-                existing_records = []
-        else:
-            existing_records = []
-
-        combined = existing_records + psnr_record
-        with tempfile.NamedTemporaryFile(
-            mode="w", dir=log_save_path.parent, delete=False, encoding="utf-8"
-        ) as tmp_file:
-            json.dump(combined, tmp_file)
-            temp_name = tmp_file.name
-        os.replace(temp_name, log_save_path)
+                img.save(self.artifact_path / f"{i}.png")
 
         # Save final model
-        model_save_path = self.save_path / "model.pth"
+        model_save_path = self.model_path / self.model_name
         model_save_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({"state_dict": model.state_dict(), "method": self.method}, model_save_path)
+        torch.save({"state_dict": model.state_dict()}, model_save_path)
 
 
 def main():
