@@ -1,59 +1,64 @@
-import os
-
+import argparse
+import copy
 import glob
+import logging
+import os
 import random
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
 import torch
-from torch import nn, optim
+from omegaconf import OmegaConf
 from skimage import io as skio
 from skimage.metrics import peak_signal_noise_ratio
-from dataclasses import dataclass
-
-from models.model import INR
-from omegaconf import OmegaConf, ListConfig, DictConfig
-import argparse
-
-mid = 100
+from torch import nn, optim
 
 
-@dataclass
-class MetaLearnerConfig:
-    data_root: str
-    save_path: str
-    method: str = "GKAN"
-    meta_iters: int = 500
-    meta_batch_size: int = 4
-    inner_steps: int = 5
-    inner_lr: float = 1e-2
-    meta_lr: float = 1e-3
-    n_support: int = 4096
-    n_query: int = 4096
+class BaseMetaLearner(ABC):
+    @abstractmethod
+    def train(self, seed: int = 1):
+        pass
 
 
-class MetaLearner:
-    def __init__(self, config: MetaLearnerConfig | ListConfig | DictConfig):
-        self.method: str = config.method
-        self.save_path = self.save_path
-        self.data_root: str = config.data_root
-        self.meta_iters: int = config.meta_iters
-        self.meta_batch_size: int = config.meta_batch_size
-        self.inner_steps: int = config.inner_steps
-        self.inner_lr: float = config.inner_lr
-        self.meta_lr: float = config.meta_lr
-        self.n_support: int = config.n_support
-        self.n_query: int = config.n_query
+class MetaLearner(BaseMetaLearner):
+    def __init__(
+        self,
+        data_root: str | Path,
+        save_path: str | Path,
+        model_name: str,
+        model: nn.Module,
+        meta_iters: int = 500,
+        meta_batch_size: int = 4,
+        inner_steps: int = 5,
+        inner_lr: float = 1e-2,
+        meta_lr: float = 1e-3,
+        n_support: int = 4096,
+        n_query: int = 4096,
+    ):
+        self.model: nn.Module = model.to()
+        self.save_path: Path = Path(save_path)
+        self.model_name: str = model_name
+        self.data_root: Path = Path(data_root)
+        self.meta_iters: int = meta_iters
+        self.meta_batch_size: int = meta_batch_size
+        self.inner_steps: int = inner_steps
+        self.inner_lr: float = inner_lr
+        self.meta_lr: float = meta_lr
+        self.n_support: int = n_support
+        self.n_query: int = n_query
 
-    def _list_images(self, root: str) -> List[str]:
+        self.logger = logging.getLogger(__name__)
+
+    def _list_images(self, root: Path) -> List[Path]:
         exts = ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.ppm", "*.pgm"]
         paths = []
         for ext in exts:
             paths.extend(glob.glob(os.path.join(root, "**", ext), recursive=True))
         return sorted(paths)
 
-    def _load_image_tensor(self, path: str, device: torch.device) -> torch.Tensor:
+    def _load_image_tensor(self, path: Path, device: torch.device) -> torch.Tensor:
         img_np = skio.imread(path)
         if img_np.ndim == 2:
             img_np = img_np[:, :, None]
@@ -68,9 +73,7 @@ class MetaLearner:
         img = torch.from_numpy(img_np).to(device)
         return img
 
-    def _indices_to_coords(
-        self, idx: torch.Tensor, h: int, w: int, c: int
-    ) -> torch.Tensor:
+    def _indices_to_coords(self, idx: torch.Tensor, h: int, w: int, c: int) -> torch.Tensor:
         idx = idx.to(torch.int64)
         z = (idx % c) + 1
         hw_idx = idx // c
@@ -101,11 +104,10 @@ class MetaLearner:
         return coords_support, ys, coords_query, yq
 
     def _clone_model(self, model: nn.Module) -> nn.Module:
-        fast = INR(model.method, mid).to(next(model.parameters()).device)
-        fast.load_state_dict(model.state_dict())
-        return fast
+        clone = copy.deepcopy(model)
+        return clone
 
-    def maml_train(self, seed: int = 1):
+    def train(self, seed: int = 1):
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -115,14 +117,15 @@ class MetaLearner:
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        self.model.to(device)
+
         # Collect tasks (images)
         img_paths = self._list_images(self.data_root)
         if len(img_paths) == 0:
             raise RuntimeError(f"No images found under {self.data_root}")
 
         # Initialize base model and meta-optimizer
-        base_model = INR(self.method, mid=mid).to(device)
-        base_model.method = self.method  # type: ignore
+        base_model = self.model
         meta_opt = optim.Adam(base_model.parameters(), lr=self.meta_lr)
         mse = nn.MSELoss()
 
@@ -133,18 +136,14 @@ class MetaLearner:
         for it in range(1, self.meta_iters + 1):
             meta_opt.zero_grad()
 
-            batch_paths = random.sample(
-                img_paths, k=min(self.meta_batch_size, len(img_paths))
-            )
+            batch_paths = random.sample(img_paths, k=min(self.meta_batch_size, len(img_paths)))
             task_psnr = []
 
             for pth in batch_paths:
                 # Prepare task data
                 img = self._load_image_tensor(pth, device)
 
-                xs, ys, xq, yq = self._split_support_query(
-                    img, self.n_support, self.n_query
-                )
+                xs, ys, xq, yq = self._split_support_query(img, self.n_support, self.n_query)
 
                 # Inner-loop adaptation on a cloned model (FO-MAML)
                 fast_model = self._clone_model(base_model)
@@ -187,31 +186,26 @@ class MetaLearner:
 
             if it % 10 == 0:
                 avg_psnr = float(np.mean(task_psnr)) if task_psnr else 0.0
-                print(
-                    f"[Meta {it:04d}/{self.meta_iters}] Avg Query PSNR: {avg_psnr:.2f} dB"
-                )
+                print(f"[Meta {it:04d}/{self.meta_iters}] Avg Query PSNR: {avg_psnr:.2f} dB")
 
         # Save meta-learned weights in repo-level checkpoints directory
         ckpt_dir = Path(self.save_path)
         ckpt_dir.mkdir(parents=True, exist_ok=True)
-        ckpt_path = ckpt_dir / f"maml_{self.method.lower()}_{mid}.pth"
-        torch.save(
-            {"state_dict": base_model.state_dict(), "method": self.method}, ckpt_path
-        )
+        ckpt_path = ckpt_dir / self.model_name
+        torch.save({"state_dict": base_model.state_dict()}, ckpt_path)
         print(f"Saved meta-learned weights to {ckpt_path}")
 
 
 def main():
+    import hydra
+
     parser = argparse.ArgumentParser()
     parser.add_argument("config_path", type=str, help="path to configuration file")
     args = parser.parse_args()
     file_config = OmegaConf.load(args.config_path)
-    base_config = OmegaConf.structured(MetaLearnerConfig)
 
-    config = OmegaConf.merge(base_config, file_config)
-
-    trainer = MetaLearner(config)
-    trainer.maml_train()
+    trainer: BaseMetaLearner = hydra.utils.instantiate(file_config)
+    trainer.train()
 
 
 if __name__ == "__main__":

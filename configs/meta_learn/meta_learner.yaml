@@ -1,0 +1,15 @@
+_target_: src.meta_learn.MetaLearner
+data_root: dataset/STI
+save_path: models/meta_learn
+model_name: maml
+model:
+  _target_: src.models.INR
+  method: GKAN
+  mid: ${args.mid}
+meta_iters: 500
+meta_batch_size: 4
+inner_steps: 5
+inner_lr: 1e-2
+meta_lr: 1e-3
+n_support: 4096
+n_query: 4096

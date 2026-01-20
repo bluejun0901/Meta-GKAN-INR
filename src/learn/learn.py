@@ -1,56 +1,53 @@
-import os
 import argparse
 import json
+import os
 import random
 import tempfile
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from omegaconf import OmegaConf, ListConfig, DictConfig
+from omegaconf import OmegaConf
 from PIL import Image
 from skimage import io as skio
 from skimage.metrics import peak_signal_noise_ratio
 from torch import optim
 from torch.utils.data import DataLoader, TensorDataset
 
-from models.model import INR
+
+class BaseLearner(ABC):
+    @abstractmethod
+    def train(self, seed: int = 1):
+        pass
 
 
-@dataclass
-class LearnerConfig:
-    image_path: str
-    save_path: str
-    method: str = "GKAN"
-    steps: int = 1000
-    learning_rate: float = 1e-3
-    batch_size: int = 100000
-    image_save_steps: int = 50
-    mid: int | None = None
-    meta_learn: bool = False
-    meta_path: str | None = None
-
-
-class Learner:
-    def __init__(self, config: LearnerConfig | ListConfig | DictConfig):
+class Learner(BaseLearner):
+    def __init__(
+        self,
+        image_path: str,
+        save_path: str | Path,
+        model: nn.Module,
+        steps: int = 1000,
+        learning_rate: float = 1e-3,
+        batch_size: int = 100000,
+        image_save_steps: int = 50,
+        meta_learn: bool = False,
+        meta_path: str | None = None,
+    ):
         # Basic hyperparameters
-        self.method: str = config.method
-        self.image_path: str = config.image_path
+        self.model = model
+        self.image_path: str = image_path
         # Accept str in config, store as Path
-        self.save_path: Path = (
-            Path(config.save_path)
-            if not isinstance(config.save_path, Path)
-            else config.save_path
-        )
-        self.steps: int = config.steps
-        self.learning_rate: float = config.learning_rate
-        self.batch_size: int = config.batch_size
-        self.image_save_steps: int = config.image_save_steps
-        self.mid: int | None = config.mid
-        self.meta_learn: bool = config.meta_learn
-        self.meta_path: str | None = config.meta_path
+        self.save_path: Path = Path(save_path)
+        self.steps: int = steps
+        self.learning_rate: float = learning_rate
+        self.batch_size: int = batch_size
+        self.image_save_steps: int = image_save_steps
+        self.meta_learn: bool = meta_learn
+        self.meta_path: str | None = meta_path
 
     def _set_seed(self, seed: int = 1) -> None:
         torch.manual_seed(seed)
@@ -87,14 +84,10 @@ class Learner:
         y_in = torch.arange(1, w + 1, dtype=torch.float32)
         z_in = torch.arange(1, c + 1, dtype=torch.float32)
         x_in, y_in, z_in = torch.meshgrid(x_in, y_in, z_in)
-        coords = torch.stack(
-            (x_in.reshape(-1), y_in.reshape(-1), z_in.reshape(-1)), dim=1
-        )
+        coords = torch.stack((x_in.reshape(-1), y_in.reshape(-1), z_in.reshape(-1)), dim=1)
         return coords
 
-    def _prepare_loader(
-        self, img: torch.Tensor, batch_size: int
-    ) -> tuple[DataLoader, torch.Tensor, torch.Tensor]:
+    def _prepare_loader(self, img: torch.Tensor, batch_size: int) -> tuple[DataLoader, torch.Tensor, torch.Tensor]:
         h, w, c = img.shape
         coords = self._make_coords(h, w, c)
         pixels = img.reshape(-1, 1).detach().cpu().to(dtype=torch.float32)
@@ -134,14 +127,12 @@ class Learner:
         data_loader, coords, gt = self._prepare_loader(gt, self.batch_size)
         data_iter = iter(data_loader)
 
-        model = INR(self.method, self.mid).to(device)
+        model = self.model.to(device)
 
         if self.meta_learn and self.meta_path:
             checkpoint = torch.load(self.meta_path, map_location="cpu")
             state_dict = (
-                checkpoint["state_dict"]
-                if isinstance(checkpoint, dict) and "state_dict" in checkpoint
-                else checkpoint
+                checkpoint["state_dict"] if isinstance(checkpoint, dict) and "state_dict" in checkpoint else checkpoint
             )
             model.load_state_dict(state_dict)
 
@@ -173,9 +164,7 @@ class Learner:
 
             if i % self.image_save_steps == 0:
                 recon = self._reconstruct_full(model, coords, gt, device)
-                ps_here = peak_signal_noise_ratio(
-                    gt.detach().cpu().numpy(), np.clip(recon, 0, 1)
-                )
+                ps_here = peak_signal_noise_ratio(gt.detach().cpu().numpy(), np.clip(recon, 0, 1))
                 psnr_record.append(
                     {
                         "name": str(self.save_path).replace("/", "_").replace("_", " "),
@@ -218,21 +207,19 @@ class Learner:
         # Save final model
         model_save_path = self.save_path / "model.pth"
         model_save_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(
-            {"state_dict": model.state_dict(), "method": self.method}, model_save_path
-        )
+        torch.save({"state_dict": model.state_dict(), "method": self.method}, model_save_path)
 
 
 def main():
+    import hydra
+
     parser = argparse.ArgumentParser()
     parser.add_argument("config_path", type=str, help="path to configuration file")
     args = parser.parse_args()
 
     file_config = OmegaConf.load(args.config_path)
-    base_config = OmegaConf.structured(LearnerConfig)
-    config = OmegaConf.merge(base_config, file_config)
 
-    learner = Learner(config)
+    learner: BaseLearner = hydra.utils.instantiate(file_config)
     learner.train()
 
 

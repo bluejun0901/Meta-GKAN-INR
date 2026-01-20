@@ -1,0 +1,13 @@
+_target_: src.learn.Learner
+image_path: dataset/STI/Classic/airplane.bmp
+save_path: models/test
+model:
+  _target_: src.models.INR
+  method: GKAN
+  mid: ${args.mid}
+steps: 1000
+learning_rate: 1e-3
+batch_size: 100000
+image_save_steps: 50
+meta_learn: True
+meta_path: ${meta_learn.save_path}/${meta_learn.model_name}

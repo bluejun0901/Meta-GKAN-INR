@@ -8,3 +8,13 @@ checkpoints/
 ./models/
 logs/
 210_OmniGothic.ttf
+runs/
+models/
+**/*.pyc
+
+**/__pycache__/
+**/.ipynb_checkpoints/
+*.py[cod]
+.ruff_cache
+
+*.log

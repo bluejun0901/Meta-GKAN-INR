@@ -1,0 +1,9 @@
+defaults:
+ - _self_
+ - meta_learn: meta_learner
+ - learn: learn
+
+args:
+  mid: 100
+  meta_learn: True
+  learn: True
