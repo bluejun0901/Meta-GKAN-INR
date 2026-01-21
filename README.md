@@ -15,7 +15,7 @@
      ```
 2. **Python 패키지 설치**:
    ```bash
-   uv python install
+   uv add pakage-name
    ```
 3. **환경 동기화**:
    ```bash
@@ -23,7 +23,7 @@
    ```
 4. **학습 실행**:
    ```bash
-   uv run python src/train.py
+   uv run python main.py -c config/path
    ```
 ### 설정(Configuration)
 * 메인 설정 파일은 `configs/config.yaml`에 위치해 있습니다. 실험에 사용할 파라미터를 설정하려면 이 파일을 수정하세요.
