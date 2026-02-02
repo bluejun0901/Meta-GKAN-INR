@@ -13,6 +13,18 @@
      ```powershell
      powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
      ```
+  프로젝트 폴더에서
+  ```bash
+  uv venv
+  uv sync
+  ```
+  를 실행하세요 이건 환경 설정입니다
+  dataset폴더를 만들고 아래 명령어를 실행하면 STI가 다운로드 됩니다
+  ```bash
+  curl -L -o ./dataset/standard-test-images.zip\
+  https://www.kaggle.com/api/v1/datasets/download/saeedehkamjoo/standard-test-images
+  ```
+  그 dataset폴더 아래에 생긴 zip파일을 푸세요
 2. **Python 패키지 설치**:
    ```bash
    uv add pakage-name
