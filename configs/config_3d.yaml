@@ -1,0 +1,6 @@
+defaults:
+ - _self_
+ - learn_3d: learn_mesh
+
+args:
+  learn_3d: True

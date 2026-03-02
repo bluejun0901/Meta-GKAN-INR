@@ -49,6 +49,16 @@
     uv run python main.py -c config-경로 -rn 실행-이름
     ```
 
+3. **3D mesh INR 학습 실행 (`main_3d.py`)**
+    별도 `pytorch3d` 설치 없이 실행할 수 있습니다.
+    ```bash
+    uv run python main_3d.py -c configs/config_3d.yaml -rn mesh-exp
+    ```
+    OBJ 경로는 `configs/learn_3d/learn_mesh.yaml`의 `mesh_path`로 설정하거나 오버라이드할 수 있습니다:
+    ```bash
+    uv run python main_3d.py -c configs/config_3d.yaml learn_3d.mesh_path=dataset/meshes/my_mesh.obj
+    ```
+
 ### 설정(Configuration)
 * 메인 설정 파일은 `configs/config.yaml`에 위치해 있습니다. 실험에 사용할 파라미터를 설정하려면 이 파일을 수정하세요.
 * 하위 설정 파일은 `configs/`폴더의 하위 폴더에 저장되어 있습니다.

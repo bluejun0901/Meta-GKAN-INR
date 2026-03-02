@@ -1,10 +1,13 @@
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
 import cv2
 import numpy as np
-from src.utils import separate_frequencies, pad_image_to_block_size
 from skimage.metrics import peak_signal_noise_ratio
+
+from src.utils import pad_image_to_block_size, separate_frequencies
+
 
 def process_image_frequency_sum(folder_path, ref_image_path, block_size=8, cutoff=3, step=50):
     # 1. Reference 이미지 로드 (PSNR 계산용)
@@ -19,10 +22,10 @@ def process_image_frequency_sum(folder_path, ref_image_path, block_size=8, cutof
 
     indices = []
     for f in file_list:
-        if f.startswith('low') and f.endswith('.png'):
+        if f.startswith("low") and f.endswith(".png"):
             # 'low'와 '.png' 사이의 문자열만 추출
-            num_part = f.replace('low', '').replace('.png', '')
-            
+            num_part = f.replace("low", "").replace(".png", "")
+
             # 추출된 부분이 숫자인지 확인
             if num_part.isdigit():
                 indices.append(int(num_part))
@@ -50,7 +53,7 @@ def process_image_frequency_sum(folder_path, ref_image_path, block_size=8, cutof
         # 3. 주파수 분리 및 필요한 성분 추출
         # low{i}.png 에서 저주파만 추출
         low_part, _ = separate_frequencies(img_low_src, block_size=block_size, cutoff=cutoff)
-        
+
         # high{i}.png 에서 고주파만 추출
         _, high_part = separate_frequencies(img_high_src, block_size=block_size, cutoff=cutoff)
 
@@ -72,9 +75,10 @@ def process_image_frequency_sum(folder_path, ref_image_path, block_size=8, cutof
         psnr_val = peak_signal_noise_ratio(ref_img, sum_img_resized, data_range=255)
         print(f"{i:<10} | {psnr_val:<15.4f}")
 
+
 # --- 설정값 ---
-target_folder = "runs/2026-02-03_02-16-13/learn/artifacts"      # 이미지가 저장된 폴더
-reference_path = "runs/2026-02-03_02-16-13/learn/artifacts/original_padded.png"   # 비교 대상 원본 이미지
+target_folder = "runs/2026-02-03_02-16-13/learn/artifacts"  # 이미지가 저장된 폴더
+reference_path = "runs/2026-02-03_02-16-13/learn/artifacts/original_padded.png"  # 비교 대상 원본 이미지
 BLOCK_SIZE = 64
 CUTOFF = 8
 

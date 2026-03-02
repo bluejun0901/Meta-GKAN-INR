@@ -111,7 +111,9 @@ class DivLearner(BaseLearner):
         original_pad_save = Image.fromarray(img_np)
         original_pad_save.save(self.artifact_path / "original_padded.png")
 
-        low_freq_img_np, high_freq_img_np = separate_frequencies(img_np, block_size=self.block_size, cutoff=self.cutofff)
+        low_freq_img_np, high_freq_img_np = separate_frequencies(
+            img_np, block_size=self.block_size, cutoff=self.cutofff
+        )
 
         low_freq_img_np = self._normalize_image(low_freq_img_np)
         high_freq_img_np = self._normalize_image(high_freq_img_np)
@@ -163,7 +165,7 @@ class DivLearner(BaseLearner):
             recon = torch.cat(outs, dim=0).reshape(img.shape).cpu().numpy()
         model.train()
         return recon
-    
+
     def train_high(self, high_img: torch.Tensor) -> None:
         device = self._device()
 
@@ -263,7 +265,6 @@ class DivLearner(BaseLearner):
         device = self._device()
 
         low_img, high_img = self._load_image_tensor(self.image_path, device)
-        
+
         self.train_low(low_img)
         self.train_high(high_img)
-        
