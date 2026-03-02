@@ -1,0 +1,33 @@
+_target_: src.learn.learn_mesh.MeshLearner
+mesh_path: dataset/meshes/bimba/input_normalized.obj
+model_x:
+  _target_: src.models.MeshKANMLP
+  input_dim: 3
+  hidden_dim: 512
+  output_dim: 1
+  num_layers: 8
+  pe_dim: 6
+model_y:
+  _target_: src.models.MeshKANMLP
+  input_dim: 3
+  hidden_dim: 512
+  output_dim: 1
+  num_layers: 8
+  pe_dim: 6
+model_z:
+  _target_: src.models.MeshKANMLP
+  input_dim: 3
+  hidden_dim: 512
+  output_dim: 1
+  num_layers: 8
+  pe_dim: 6
+model_name: mesh_inr_xyz.pth
+steps: 10000
+learning_rate: 1e-4
+num_surface_samples: 15000
+eval_samples: 25000
+icosphere_level: 4
+normalize_mesh: True
+log_steps: 10
+mesh_save_steps: 100
+distance_scale: 10000.0
