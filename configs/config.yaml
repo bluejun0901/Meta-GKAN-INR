@@ -4,6 +4,6 @@ defaults:
  - learn: learn
 
 args:
-  mid: 260
-  meta_learn: False
+  mid: 100
+  meta_learn: True
   learn: True
